@@ -26,6 +26,7 @@ unsigned char getPid    = 0;
  *  4 = Engine Oil Temperature A - 40
  *  5 = Ambient Air Temperature A - 40
  *  6 = Fuel Level (100/255)A
+ *  7 = Check Engine Light
  */
 unsigned short DataPoint = 0;
 
@@ -34,6 +35,11 @@ void sendPid(unsigned char __pid) {
     CAN.sendMsgBuf(CAN_ID_PID, 0, 8, tmp);
 
     switch(__pid){
+        //1 This is what we have to take apart to come up with if the check engine light is on or off
+        case 1:
+            DataPoint=7;
+             break;
+             
         //5 this is going to be the data point for Engine Coolant temp
         case 5:
             DataPoint=3;
@@ -82,9 +88,9 @@ void setup() {
 
 
 void loop() {
-    delay(3000);
+    delay(1000);
 
-    SERIAL_PORT_MONITOR.println("-----------------------------------------------------");
+    SERIAL_PORT_MONITOR.println("----------------------------------");
 
     //Vehicle Speed in kmph
     sendPid(13);
@@ -109,7 +115,11 @@ void loop() {
     //Fuel Tank Level Input
     sendPid(47);
     delay(10);
-    taskCanRecv();            
+    taskCanRecv();
+    //Checking For Check Engine light 
+    sendPid(1);
+    delay(10);
+    taskCanRecv();               
 }
 
 void taskCanRecv() {
@@ -118,6 +128,7 @@ void taskCanRecv() {
     unsigned int CoolantTemp = 0;
     unsigned int OilTemp = 0;
     unsigned int AmbientTemp = 0;
+    unsigned short CheckEngineLight = 0;
     
     //Need a float for 100/255
     float calc1 = 100.0/255.0;
@@ -128,13 +139,15 @@ void taskCanRecv() {
 
     if (CAN_MSGAVAIL == CAN.checkReceive()) {                // check if get data
         CAN.readMsgBuf(&len, buf);    // read data,  len: data length, buf: data buf
-        for (int i = 2; i < len; i++) { // print the data
+        /*
+        for (int i = 2; i < len - 3; i++) { // print the data
             SERIAL_PORT_MONITOR.print(buf[i], HEX);
             SERIAL_PORT_MONITOR.print("\t");
             
         }
         SERIAL_PORT_MONITOR.println();
-
+        */
+        
         switch(DataPoint){
           //buf[3] = data point A, we will mostly only need A and B
           //Math behind the RPM calculation
@@ -146,7 +159,7 @@ void taskCanRecv() {
             break;
             
           case 2:
-            VehicleSpeed = (0.6213711922*buf[3]);
+            VehicleSpeed = (0.6213711*buf[3]);
             SERIAL_PORT_MONITOR.print(VehicleSpeed);
             SERIAL_PORT_MONITOR.println(" MPH");
             DataPoint = 0;
@@ -174,11 +187,19 @@ void taskCanRecv() {
             break;
 
          case 6:
-            //this is calculating for the amount left 
             FuelLevel =((calc1)*buf[3]);
             SERIAL_PORT_MONITOR.print(FuelLevel);
             SERIAL_PORT_MONITOR.println(" % Fuel left");
             DataPoint = 0; 
+            break;
+
+         case 7:
+            if(buf[3] > 127){
+            SERIAL_PORT_MONITOR.println("Check Engine Light On");
+            CheckEngineLight = 1;
+            }else
+            SERIAL_PORT_MONITOR.println("Check Engine Light Off");
+            CheckEngineLight = 0;
             break;
                                    
           default:
