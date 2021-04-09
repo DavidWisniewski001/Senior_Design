@@ -1,11 +1,7 @@
 #include <SPI.h>
 
 #define CAN_2515
-// #define CAN_2518FD
 
-// For Arduino MCP2515 Hat:
-// the cs pin of the version after v1.1 is default to D9
-// v0.9b and v1.0 is default D10
 const int SPI_CS_PIN = 9;
 const int CAN_INT_PIN = 2;
 
@@ -24,25 +20,48 @@ unsigned char PID_INPUT;
 unsigned char getPid    = 0;
 
 /* This is going to be where we store what data we are looking at for calculations and sending data
- *  1 = Engine RPM
- *  2 = Vehicle Speed
+ *  1 = Engine RPM (256A+B)/4 
+ *  2 = Vehicle Speed A
+ *  3 = Engine Coolant Temp A - 40
+ *  4 = Engine Oil Temperature A - 40
+ *  5 = Ambient Air Temperature A - 40
+ *  6 = Fuel Level (100/255)A
  */
 unsigned short DataPoint = 0;
 
 void sendPid(unsigned char __pid) {
     unsigned char tmp[8] = {0x02, 0x01, __pid, 0, 0, 0, 0, 0};
-    SERIAL_PORT_MONITOR.print("SEND PID: 0x");
-    SERIAL_PORT_MONITOR.println(__pid, HEX);
     CAN.sendMsgBuf(CAN_ID_PID, 0, 8, tmp);
 
     switch(__pid){
-        //C -> 12 this is going ot be for engine RPM
+        //5 this is going to be the data point for Engine Coolant temp
+        case 5:
+            DataPoint=3;
+            break;
+            
+        //C -> 12 this is going to be for engine RPM
         case 12:
             DataPoint=1;
             break;
             
+        //D -> 13 This is going to be for vehicle speed    
         case 13:
              DataPoint=2;
+             break;
+
+        //2F -> 47 Fuel Tank Level Input
+        case 47:
+            DataPoint=6l;
+            break;
+
+        //46 -> 70 This is the outside air temp
+        case 70:
+             DataPoint =5;
+             break;
+             
+        //5C -> 92 Engine Oil Temperature     
+        case 92:
+             DataPoint=4;
              break;
 
         default:
@@ -65,6 +84,8 @@ void setup() {
 void loop() {
     delay(3000);
 
+    SERIAL_PORT_MONITOR.println("-----------------------------------------------------");
+
     //Vehicle Speed in kmph
     sendPid(13);
     delay(10);
@@ -73,16 +94,41 @@ void loop() {
     sendPid(12);
     delay(10);    
     taskCanRecv();
-        
+    // Engine Coolant Temp
+    sendPid(5);
+    delay(10);
+    taskCanRecv();
+    // Engine Oil Temp
+    sendPid(92);
+    delay(10);
+    taskCanRecv();
+    //AmbientAirTemp
+    sendPid(70);
+    delay(10);
+    taskCanRecv(); 
+    //Fuel Tank Level Input
+    sendPid(47);
+    delay(10);
+    taskCanRecv();            
 }
 
 void taskCanRecv() {
+    unsigned int EngineRPM = 0;
+    unsigned int VehicleSpeed = 0;
+    unsigned int CoolantTemp = 0;
+    unsigned int OilTemp = 0;
+    unsigned int AmbientTemp = 0;
+    
+    //Need a float for 100/255
+    float calc1 = 100.0/255.0;
+    float FuelLevel = 0;
+    
     unsigned char len = 0;
     unsigned char buf[8];
 
     if (CAN_MSGAVAIL == CAN.checkReceive()) {                // check if get data
         CAN.readMsgBuf(&len, buf);    // read data,  len: data length, buf: data buf
-        for (int i = 0; i < len; i++) { // print the data
+        for (int i = 2; i < len; i++) { // print the data
             SERIAL_PORT_MONITOR.print(buf[i], HEX);
             SERIAL_PORT_MONITOR.print("\t");
             
@@ -90,7 +136,52 @@ void taskCanRecv() {
         SERIAL_PORT_MONITOR.println();
 
         switch(DataPoint){
+          //buf[3] = data point A, we will mostly only need A and B
+          //Math behind the RPM calculation
           case 1:
+            EngineRPM = (256*buf[3]+buf[4])/4;
+            SERIAL_PORT_MONITOR.print(EngineRPM);
+            SERIAL_PORT_MONITOR.println(" RPM");
+            DataPoint = 0;
+            break;
+            
+          case 2:
+            VehicleSpeed = (0.6213711922*buf[3]);
+            SERIAL_PORT_MONITOR.print(VehicleSpeed);
+            SERIAL_PORT_MONITOR.println(" MPH");
+            DataPoint = 0;
+            break;
+
+          case 3:
+            CoolantTemp = ((buf[3] - 40)*(9/5) + 32);
+            SERIAL_PORT_MONITOR.print(CoolantTemp);
+            SERIAL_PORT_MONITOR.println(" Degrees F - Coolant");
+            DataPoint = 0;
+            break;
+
+          case 4:
+            OilTemp = ((buf[3] - 40)*(9/5) + 32);
+            SERIAL_PORT_MONITOR.print(OilTemp);
+            SERIAL_PORT_MONITOR.println(" Degrees F - Oil");
+            DataPoint = 0;
+            break;
+
+         case 5:
+            AmbientTemp = ((buf[3] - 40)*(9/5) + 32);
+            SERIAL_PORT_MONITOR.print(AmbientTemp);
+            SERIAL_PORT_MONITOR.println(" Degrees F - Ambient (Outside)");
+            DataPoint = 0;
+            break;
+
+         case 6:
+            //this is calculating for the amount left 
+            FuelLevel =((calc1)*buf[3]);
+            SERIAL_PORT_MONITOR.print(FuelLevel);
+            SERIAL_PORT_MONITOR.println(" % Fuel left");
+            DataPoint = 0; 
+            break;
+                                   
+          default:
             break;
         }
     }
