@@ -57,7 +57,7 @@ void sendPid(unsigned char __pid) {
 
         //2F -> 47 Fuel Tank Level Input
         case 47:
-            DataPoint=6l;
+            DataPoint=6;
             break;
 
         //46 -> 70 This is the outside air temp
