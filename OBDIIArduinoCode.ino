@@ -1,4 +1,5 @@
 #include <SPI.h>
+#include <SoftwareSerial.h>
 
 #define CAN_2515
 
@@ -29,6 +30,9 @@ unsigned char getPid    = 0;
  *  7 = Check Engine Light
  */
 unsigned short DataPoint = 0;
+
+//setting up hc05 15 rx 14 tx
+SoftwareSerial hc06(15,14);
 
 void sendPid(unsigned char __pid) {
     unsigned char tmp[8] = {0x02, 0x01, __pid, 0, 0, 0, 0, 0};
@@ -76,7 +80,11 @@ void sendPid(unsigned char __pid) {
 }
 
 void setup() {
-    SERIAL_PORT_MONITOR.begin(115200);
+    SERIAL_PORT_MONITOR.begin(9600);
+
+    //begin the bluetooth connection
+    hc06.begin(9600);
+    
     while(!Serial){};
 
     while (CAN_OK != CAN.begin(CAN_500KBPS)) {             // init can bus : baudrate = 500k
@@ -155,6 +163,7 @@ void taskCanRecv() {
             EngineRPM = (256*buf[3]+buf[4])/4;
             SERIAL_PORT_MONITOR.print(EngineRPM);
             SERIAL_PORT_MONITOR.println(" RPM");
+            hc06.write(EngineRPM);
             DataPoint = 0;
             break;
             
@@ -162,6 +171,7 @@ void taskCanRecv() {
             VehicleSpeed = (0.6213711*buf[3]);
             SERIAL_PORT_MONITOR.print(VehicleSpeed);
             SERIAL_PORT_MONITOR.println(" MPH");
+            hc06.write(VehicleSpeed);
             DataPoint = 0;
             break;
 
@@ -169,6 +179,7 @@ void taskCanRecv() {
             CoolantTemp = ((buf[3] - 40)*(9/5) + 32);
             SERIAL_PORT_MONITOR.print(CoolantTemp);
             SERIAL_PORT_MONITOR.println(" Degrees F - Coolant");
+            hc06.write(CoolantTemp);
             DataPoint = 0;
             break;
 
@@ -176,6 +187,7 @@ void taskCanRecv() {
             OilTemp = ((buf[3] - 40)*(9/5) + 32);
             SERIAL_PORT_MONITOR.print(OilTemp);
             SERIAL_PORT_MONITOR.println(" Degrees F - Oil");
+            hc06.write(OilTemp);
             DataPoint = 0;
             break;
 
@@ -183,6 +195,7 @@ void taskCanRecv() {
             AmbientTemp = ((buf[3] - 40)*(9/5) + 32);
             SERIAL_PORT_MONITOR.print(AmbientTemp);
             SERIAL_PORT_MONITOR.println(" Degrees F - Ambient (Outside)");
+            hc06.write(AmbientTemp);
             DataPoint = 0;
             break;
 
@@ -190,6 +203,7 @@ void taskCanRecv() {
             FuelLevel =((calc1)*buf[3]);
             SERIAL_PORT_MONITOR.print(FuelLevel);
             SERIAL_PORT_MONITOR.println(" % Fuel left");
+            hc06.write(FuelLevel);
             DataPoint = 0; 
             break;
 
@@ -200,6 +214,8 @@ void taskCanRecv() {
             }else
             SERIAL_PORT_MONITOR.println("Check Engine Light Off");
             CheckEngineLight = 0;
+
+            hc06.write(CheckEngineLight);
             break;
                                    
           default:
