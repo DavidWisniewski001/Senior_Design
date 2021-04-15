@@ -32,7 +32,7 @@ unsigned char getPid    = 0;
 unsigned short DataPoint = 0;
 
 //setting up hc05 15 rx 14 tx
-SoftwareSerial hc06(15,14);
+SoftwareSerial hc06(14,15);
 
 void sendPid(unsigned char __pid) {
     unsigned char tmp[8] = {0x02, 0x01, __pid, 0, 0, 0, 0, 0};
